@@ -1,0 +1,15 @@
+metric,baseline,with_device
+kWh,1189.44,618.64
+kWh_per_day,39.65,20.62
+LKR,60661.68,31550.76
+kgCO2e,844.51,439.24
+AC_on_hours,250.2,183.78
+AC_on_while_empty_hours,140.28,73.87
+comfort_pct,14.51,95.97
+too_cold_pct,80.27,0.0
+too_warm_pct,0.2,3.35
+mean_T_occupied,20.27,24.64
+mean_RH_occupied_pct,63.01,60.41
+compressor_starts,1263,802
+alarm_minutes_over_28C,2,19
+remote_overrides,0,0

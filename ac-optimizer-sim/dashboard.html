@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AC Optimizer Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE work: an engineer's test-bench readout for a pitch team
+   IDEA a building energy meter's monitoring screen: live trace on top, settings panel beside it
+   PICTURE one busy day's room temperature, power and headcount, baseline vs device, drawn large
+   COLOUR Team Heights forest green field, device green, baseline amber, neutral greys
+   TYPE Space Grotesk for figures and titles + Inter for text
+   LAYOUT laptop: green band with finding + key figures, then charts left / controls right; phone: band, chart, controls */
+:root{color-scheme:light dark;--bg:light-dark(#ffffff,#0e1512);--ink:light-dark(#14201b,#e6efe9);--mute:light-dark(#5c6a64,#9db0a7);--line:light-dark(#e2e8e5,#24322c);--panel:light-dark(#f3f7f5,#15201b);--field:light-dark(#1B4332,#10281e);--dev:light-dark(#1f8a5f,#4cc98f);--base:light-dark(#d98a1c,#f0b354);--out:light-dark(#9aa6a1,#5f6f68);--band:light-dark(#1f8a5f1a,#4cc98f1f)}
+:root[data-theme=light]{color-scheme:light}
+:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.55 Inter,system-ui,sans-serif;overflow-x:clip}
+h1,h2,.num{font-family:"Space Grotesk",Inter,sans-serif;letter-spacing:-.02em}
+.band{padding-block:clamp(24px,3.5vw,48px);padding-inline:max(5vw,16px)}
+.top{background:var(--field);color:#fff}
+.top h1{font-size:clamp(28px,4vw,46px);line-height:1.08;margin:0 0 6px;max-width:22ch;text-wrap:balance}
+.top p{margin:0;color:#cfe6da;max-width:70ch}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(9.5em,1fr));gap:1px;margin-top:24px;background:#ffffff26;border-radius:10px;overflow:hidden}
+.kpi{background:var(--field);padding:14px 16px}
+.kpi .num{font-size:clamp(24px,3vw,34px);font-weight:700;white-space:nowrap;line-height:1.1}
+.kpi .lab{font-size:13px;color:#cfe6da}
+.wrap{max-width:1320px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:28px;align-items:start}
+@media(max-width:900px){.wrap{grid-template-columns:minmax(0,1fr)}}
+h2{font-size:20px;margin:0 0 4px;line-height:1.2}
+.sub{color:var(--mute);font-size:14px;margin:0 0 10px}
+.card{border-top:1px solid var(--line);padding-top:18px;margin-top:22px}
+.card:first-child{border-top:0;padding-top:0;margin-top:0}
+.fig{position:relative;min-height:430px}
+.fig.short{min-height:240px}
+.fig>svg{position:absolute;inset:0;width:100%;height:100%}
+svg text{font:13px Inter,sans-serif;fill:var(--mute);paint-order:stroke;stroke:var(--bg);stroke-width:4px}
+svg text.lab{font-weight:600}
+.dayrow{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:4px 0 8px;font-size:14px;color:var(--mute)}
+.dayrow input{flex:1 1 200px}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:28px}
+.split{display:grid;gap:10px}
+.split .row{display:grid;grid-template-columns:5.5em minmax(0,1fr);gap:10px;align-items:center;font-size:14px}
+.bar{display:flex;height:30px;border-radius:6px;overflow:hidden;background:var(--panel)}
+.bar span{display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden}
+.cold{background:#3b82c4}.ok{background:var(--dev)}.warm{background:#d4542e}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--mute);margin-top:6px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:7px 4px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left;white-space:normal}
+th{font-weight:600;color:var(--mute)}
+.panel{background:var(--panel);border-radius:12px;padding:18px;position:sticky;top:12px}
+@media(max-width:900px){.panel{position:static}}
+.panel h3{font:600 15px Inter,sans-serif;margin:18px 0 8px}
+.panel h3:first-child{margin-top:0}
+.ctl{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;margin-bottom:10px;font-size:14px}
+.ctl output{font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
+.ctl input[type=range]{grid-column:1/-1}
+input[type=range]{width:100%;accent-color:var(--dev);height:28px}
+select,input[type=number]{font:16px Inter,sans-serif;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);width:100%}
+.ctl select,.ctl input[type=number]{grid-column:1/-1}
+label.chk{display:flex;gap:8px;align-items:center;font-size:14px;margin:6px 0 10px;min-height:28px}
+button{font:600 15px Inter,sans-serif;padding:10px 14px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer;min-height:44px}
+button:hover{border-color:var(--dev)}
+:focus-visible{outline:2px solid var(--dev);outline-offset:2px}
+.note{font-size:13px;color:var(--mute);margin-top:10px}
+details{margin-top:22px;border-top:1px solid var(--line);padding-top:14px}
+summary{font-weight:600;cursor:pointer;min-height:32px}
+details p,details li{font-size:14px;color:var(--mute);max-width:75ch}
+.files{display:grid;gap:10px;margin:10px 0}
+.files label{font-size:14px}
+.scroll{overflow-x:auto}
+@media(max-width:600px){table{font-size:13px}th,td{padding:6px 3px}.kpi:last-child:nth-child(odd){grid-column:1/-1}}
+</style>
+</head>
+<body>
+<header class="band top">
+  <h1 id="headline">Running the simulation…</h1>
+  <p id="lede">30 days, one lecture room, today's habits against the clip-on device.</p>
+  <div class="kpis" id="kpis"></div>
+</header>
+
+<main class="band">
+ <div class="wrap">
+  <section>
+   <div class="card">
+    <h2 id="dayTitle">One day in the room</h2>
+    <p class="sub">Room temperature, AC power and headcount. Shaded band = the device's comfort range.</p>
+    <div class="dayrow"><label for="day">Day</label><input type="range" id="day" min="1" max="30" value="1"><output id="dayOut"></output></div>
+    <div class="fig" id="dayFig"><svg id="daySvg" role="img" aria-label="Room temperature, AC power and people for one day"></svg></div>
+   </div>
+
+   <div class="card">
+    <h2 id="dailyTitle">Daily AC energy</h2>
+    <p class="sub">kWh per day. Weekends are quiet in both scenarios.</p>
+    <div class="fig short" id="dailyFig"><svg id="dailySvg" role="img" aria-label="Daily energy, baseline against device"></svg></div>
+   </div>
+
+   <div class="card two">
+    <div>
+     <h2>Comfort during class time</h2>
+     <p class="sub">Share of occupied minutes. Comfortable = inside the band (+0.5 °C) and humidity ≤ 70%.</p>
+     <div class="split" id="split"></div>
+     <div class="legend"><span><i class="cold"></i>Too cold</span><span><i class="ok"></i>Comfortable</span><span><i class="warm"></i>Too warm</span></div>
+    </div>
+    <div>
+     <h2>What the AC did</h2>
+     <p class="sub">Totals over the simulated period.</p>
+     <div class="scroll"><table id="ops"></table></div>
+    </div>
+   </div>
+
+   <details>
+    <summary>Use your own data and calibrate</summary>
+    <p>Upload CSVs from your waste audit. The simulation reruns straight away. Without files it uses sample inputs: synthetic Colombo weather and a university timetable.</p>
+    <div class="files">
+     <label>Occupancy CSV (columns: minute,count; minute 0 = day 1 at 00:00)<br><input type="file" id="occFile" accept=".csv,text/csv"></label>
+     <label>Weather CSV (columns: hour,t_out,rh_out; humidity in %)<br><input type="file" id="wxFile" accept=".csv,text/csv"></label>
+     <div class="ctl"><span>Metered baseline kWh for the same days</span><output id="calOut"></output><input type="number" id="measured" placeholder="e.g. 950" min="0"></div>
+     <button id="clearFiles" type="button">Back to sample inputs</button>
+     <p id="fileMsg" class="note"></p>
+    </div>
+    <p><strong>How it works.</strong> Every minute, the room's air and building mass gain heat from the walls, air leakage, people (75 W each plus moisture), lights and the sun. The AC removes heat and moisture using its own thermostat and 3-minute compressor protection; efficiency drops on hot days. The device can only do what a remote can: on/off, setpoint and mode.</p>
+    <ul>
+     <li><strong>Baseline:</strong> staff switch on at 08:00 on weekdays and off at 17:30. Outside those hours the AC goes on when people arrive and is left running after they leave.</li>
+     <li><strong>Device:</strong> starts at 24 °C, steps up toward the band's top when humidity is under 60%, uses Dry mode above 65%, steps down when the room runs warm, sets back after the room empties, then switches off. When a warm room fills it boost-cools at the band's bottom. People who feel warm may press the remote; the device honours that for 45 minutes.</li>
+     <li>Calibrate by changing AC size, number of ACs and seats until the simulated baseline is within 15% of your metered kWh.</li>
+    </ul>
+   </details>
+  </section>
+
+  <aside class="panel" aria-label="Simulation settings">
+   <h3>Room</h3>
+   <div class="ctl"><label for="seats">Seats</label><output id="seatsO"></output><input type="range" id="seats" min="10" max="200" step="10" value="80"></div>
+   <div class="ctl"><label for="nac">Split ACs</label><output id="nacO"></output><input type="range" id="nac" min="1" max="8" value="3"></div>
+   <div class="ctl"><label for="cap">Size per AC</label><output id="capO"></output>
+    <select id="cap"><option value="3.5">12,000 BTU (3.5 kW)</option><option value="5.3">18,000 BTU (5.3 kW)</option><option value="7" selected>24,000 BTU (7 kW)</option><option value="10.5">36,000 BTU (10.5 kW)</option></select></div>
+   <div class="ctl"><label for="actype">AC type</label><output></output>
+    <select id="actype"><option value="fixed">Fixed speed</option><option value="inverter">Inverter</option></select></div>
+   <div class="ctl"><label for="days">Days simulated</label><output></output>
+    <select id="days"><option>7</option><option>14</option><option selected>30</option></select></div>
+
+   <h3>Today's habits (baseline)</h3>
+   <div class="ctl"><label for="habit">Usual setpoint</label><output></output>
+    <select id="habit"><option value="cold" selected>Cold: mostly 18–20 °C</option><option value="mixed">Mixed: 22–24 °C</option><option value="good">Careful: 24 °C</option></select></div>
+   <div class="ctl"><label for="forget">Left on after last person</label><output id="forgetO"></output><input type="range" id="forget" min="0" max="4" step="0.5" value="2"></div>
+
+   <h3>Device settings</h3>
+   <div class="ctl"><label for="blo">Band bottom</label><output id="bloO"></output><input type="range" id="blo" min="20" max="24" step="1" value="22"></div>
+   <div class="ctl"><label for="bhi">Band top</label><output id="bhiO"></output><input type="range" id="bhi" min="24" max="27" step="1" value="26"></div>
+   <div class="ctl"><label for="empty">Set back after empty for</label><output id="emptyO"></output><input type="range" id="empty" min="5" max="30" step="5" value="10"></div>
+   <div class="ctl"><label for="off">Then switch off after</label><output id="offO"></output><input type="range" id="off" min="0" max="60" step="5" value="20"></div>
+   <label class="chk"><input type="checkbox" id="precool" checked> Pre-cool before 08:00 and 13:00</label>
+
+   <h3>Money</h3>
+   <div class="ctl"><label for="tariff">Electricity, LKR/kWh</label><output id="tariffO"></output><input type="range" id="tariff" min="30" max="90" step="1" value="51"></div>
+   <div class="ctl"><label for="price">Device price per AC, LKR</label><output id="priceO"></output><input type="range" id="price" min="10000" max="25000" step="500" value="17500"></div>
+   <div class="ctl"><label for="seed">Random seed</label><output id="seedO"></output><input type="range" id="seed" min="1" max="20" value="7"></div>
+   <button id="reset" type="button">Reset to defaults</button>
+   <p class="note">Sample inputs throughout. Results are modelled, not measured.</p>
+  </aside>
+ </div>
+</main>
+
+<script>
+{
+/* ---------- simulation core ---------- */
+const rngF=seed=>{let s=seed>>>0||1;return()=>{s=(s+0x6D2B79F5)>>>0;let t=s;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296}};
+const gauss=r=>Math.sqrt(-2*Math.log(r()||1e-9))*Math.cos(2*Math.PI*r());
+const randint=(r,a,b)=>a+Math.floor(r()*(b-a+1));
+const PATM=101325,HFG=2.45e6,CP=1005,RHO=1.2;
+const pws=t=>610.94*Math.exp(17.625*t/(t+243.04));
+const wFrom=(t,rh)=>{const pw=rh*pws(t);return .622*pw/(PATM-pw)};
+const rhFrom=(t,w)=>Math.min(w*PATM/(.622+w)/pws(t),1);
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const MIX={cold:[[18,.3],[20,.4],[22,.2],[24,.1]],mixed:[[22,.5],[24,.5]],good:[[24,1]]};
+
+function synthWeather(days,r){const t=[],rh=[];for(let d=0;d<days;d++){const rainy=r()<.3,mean=28.5+gauss(r)*.6-(rainy?1.2:0),amp=rainy?2.5:3.5,base=rainy?.86:.78;for(let h=0;h<24;h++){const c=Math.cos(2*Math.PI*(h-14)/24);t.push(mean+amp*c);rh.push(clamp(base-.12*c,.5,.97))}}return{t,rh}}
+function synthOcc(days,seats,r){const o=new Int16Array(days*1440);for(let d=0;d<days;d++){const wk=d%7<5,slots=wk?[8,9,10,11,13,14,15,16]:[9,10],pc=wk?.7:.15;for(const s of slots){if(r()>pc){if(r()<.3){const n=randint(r,1,4),a=d*1440+s*60+randint(r,0,30),L=randint(r,15,50);for(let i=a;i<a+L;i++)o[i]=Math.max(o[i],n)}continue}const n=Math.floor(seats*(.25+.75*r())),a=d*1440+s*60+5,b=d*1440+s*60+50;for(let i=a;i<b;i++)o[i]=n;if(r()<.25)for(let i=a+30;i<b;i++)o[i]=n>>1}}return o}
+
+class Base{constructor(p,r){this.p=p;this.r=r;this.sp={};this.last=-1e9}
+ step(m,occ){const d=Math.floor(m/1440),mod=m%1440;if(!(d in this.sp)){const x=this.r();let acc=0;this.sp[d]=this.p.mix[this.p.mix.length-1][0];for(const[v,w]of this.p.mix){acc+=w;if(x<=acc){this.sp[d]=v;break}}}
+  if(occ)this.last=m;const on=(d%7<5&&mod>=480&&mod<1050)||occ||(m-this.last<this.p.forget*60);return[on,this.sp[d],'cool']}}
+
+class Smart{constructor(p,r){this.p=p;this.r=r;this.on=false;this.start=clamp(24,p.blo,p.bhi);this.sp=this.start;this.mode='cool';this.absent=1e9;this.last=0;this.ovU=-1;this.ovS=null;this.unc=0;this.overrides=0;this.boost=false;this.setback=false}
+ step(m,occ,t,rh){const p=this.p,d=Math.floor(m/1440),mod=m%1440;this.absent=occ?0:this.absent+1;
+  if(p.precool&&!occ&&d%7<5&&(mod>=465&&mod<480||mod>=765&&mod<780)){this.on=true;this.setback=false;this.sp=this.start;this.mode='cool';this.last=m;this.absent=0;return[true,this.start,'cool']}
+  if(this.absent>=p.empty+p.off){this.on=false;this.setback=false;this.sp=this.start;this.mode='cool';this.ovU=-1;this.ovS=null;return[false,this.sp,'cool']}
+  if(this.absent>=p.empty){this.ovU=-1;this.ovS=null;this.setback=true;return[true,Math.max(27,p.bhi+1),'cool']}
+  if(!this.on||this.setback){this.on=true;this.setback=false;this.mode='cool';this.last=m;this.boost=t>this.start+1;this.sp=this.boost?p.blo:this.start}
+  if(this.boost){if(t<=this.start+1){this.boost=false;this.sp=this.start;this.last=m}else return[true,p.blo,'cool']}
+  if(occ&&(t>p.bhi+.5||rh>.7))this.unc++;else this.unc=0;
+  if(this.unc>=10&&m>=this.ovU&&this.r()<.3){this.ovS=[20,22,23][Math.floor(this.r()*3)];this.ovU=m+45;this.overrides++;this.unc=0}
+  if(m<this.ovU)return[true,this.ovS,'cool'];
+  if(this.ovS!==null){this.sp=clamp(this.ovS,p.blo,p.bhi);this.ovS=null;this.last=m}
+  if(m-this.last>=15){this.last=m;
+   if(t>this.sp+1||t>p.bhi+.5){this.mode='cool';this.sp=Math.max(p.blo,this.sp-1)}
+   else if(rh>.65){if(this.mode==='cool'&&t<=this.sp+.5)this.mode='dry';else{this.mode='cool';this.sp=Math.max(p.blo,this.sp-1)}}
+   else if(rh<.6&&t<=this.sp+.5){this.mode='cool';this.sp=Math.min(p.bhi,this.sp+1)}}
+  return[true,this.sp,this.mode]}}
+
+function simulate(p,ctrl,occ,wx,smart){
+ const n=occ.length,V=120*Math.max(.5,p.seats/80)*3.2,Ma=V*RHO,Ca=Ma*CP*3,UA=300*Math.max(.5,p.seats/80),Gi=.7*V*RHO*CP/3600,mi=.7*V*RHO/3600,Cm=15e6*Math.max(.5,p.seats/80),Hm=1200*Math.max(.5,p.seats/80),wmin=wFrom(12,.95);
+ const lights=1200*Math.max(.5,p.seats/80),equip=400,solar=1500*Math.max(.5,p.seats/80);
+ const eta=3.2/carnot(27,35);
+ let T=28,Tm=28,W=wFrom(28,.7),comp=false,timer=99,integ=0,starts=0,alarm=0;
+ const oT=new Float32Array(n),oRH=new Float32Array(n),oP=new Float32Array(n),oOn=new Uint8Array(n);
+ for(let m=0;m<n;m++){const h=Math.floor(m/60),to=wx.t[h],wo=wFrom(to,wx.rh[h]),rh=rhFrom(T,W),ppl=occ[m];
+  const[on,sp,mode]=ctrl.step(m,ppl>0,T,rh);timer++;let f=0;
+  if(!on){if(comp){comp=false;timer=0}integ=0}
+  else if(p.type==='fixed'){if(comp&&T<sp-.5&&timer>=3){comp=false;timer=0}else if(!comp&&T>sp+.5&&timer>=3){comp=true;timer=0;starts++}f=comp?1:0}
+  else{const e=T-sp;integ=clamp(integ+e,-30,30);const g=clamp(.55+.4*e+.03*integ,0,1);if(comp&&g<.25&&T<sp-.5&&timer>=3){comp=false;timer=0}else if(!comp&&e>.5&&timer>=3){comp=true;timer=0;starts++}f=comp?Math.max(g,.25):0}
+  let cap=p.nac*p.cap*1000*(1+.01*(T-27))*(1-.008*(to-35)),shr=clamp(.75-1.1*(rh-.55),.55,.95);
+  if(mode==='dry'){cap*=.6;shr=Math.max(.4,shr-.2)}
+  const qt=cap*f;let ql=qt*(1-shr);if(W<=wmin)ql=0;const qs=qt-ql;
+  let cop=eta*carnot(T,to);if(p.type==='inverter'&&f>0)cop*=1+.25*(1-f);
+  let P=qt>0?qt/cop:0;if(on)P+=60*p.nac;if(smart)P+=1.5*p.nac;
+  const hod=(m%1440)/60,sun=hod>6.5&&hod<18.5?solar*Math.max(0,Math.sin(Math.PI*(hod-6.5)/12)):0;
+  const internal=ppl*75+(ppl>0?lights:0)+equip;
+  T+=60*((UA+Gi)*(to-T)+Hm*(Tm-T)+internal+.5*sun-qs)/Ca;
+  Tm+=60*(Hm*(T-Tm)+.5*sun)/Cm;
+  W=Math.max(.004,W+60*(mi*(wo-W)+ppl*55/HFG-ql/HFG)/Ma);
+  if(on&&ppl>0&&T>28)alarm++;
+  oT[m]=T;oRH[m]=rhFrom(T,W);oP[m]=P;oOn[m]=on?1:0}
+ return{T:oT,RH:oRH,P:oP,on:oOn,starts,alarm}}
+function carnot(ti,to){const te=ti-12+273.15,tc=to+12+273.15;return te/Math.max(tc-te,5)}
+
+function summary(p,r,occ){let kwh=0,on=0,onEmpty=0,occN=0,ok=0,cold=0,warm=0,sT=0;
+ for(let m=0;m<occ.length;m++){kwh+=r.P[m];on+=r.on[m];if(occ[m]>0){occN++;const t=r.T[m];sT+=t;if(t<p.blo)cold++;else if(t>p.bhi+.5)warm++;else if(r.RH[m]<=.7)ok++;else warm++}else if(r.on[m])onEmpty++}
+ occN=Math.max(occN,1);return{kwh:kwh/60000,on:on/60,onEmpty:onEmpty/60,ok:100*ok/occN,cold:100*cold/occN,warm:100*warm/occN,meanT:sT/occN,starts:r.starts,alarm:r.alarm}}
+
+/* ---------- UI ---------- */
+const $=id=>document.getElementById(id);
+const fmt=(x,d=0)=>x.toLocaleString('en-US',{maximumFractionDigits:d,minimumFractionDigits:d});
+const defaults={seats:80,nac:3,cap:'7',actype:'fixed',days:'30',habit:'cold',forget:2,blo:22,bhi:26,empty:10,off:20,tariff:51,price:17500,seed:7,precool:true};
+let userOcc=null,userWx=null,res=null;
+
+function read(){return{seats:+$('seats').value,nac:+$('nac').value,cap:+$('cap').value,type:$('actype').value,days:+$('days').value,mix:MIX[$('habit').value],forget:+$('forget').value,blo:+$('blo').value,bhi:+$('bhi').value,empty:+$('empty').value,off:+$('off').value,precool:$('precool').checked,tariff:+$('tariff').value,price:+$('price').value,seed:+$('seed').value}}
+
+function run(){
+ const p=read();if(p.bhi<=p.blo){p.bhi=p.blo+1}
+ const r=rngF(p.seed);let days=p.days;
+ if(userOcc)days=Math.max(1,Math.floor(userOcc.length/1440));
+ const wx=userWx?tileWx(userWx,days):synthWeather(days,r);
+ const occ=userOcc?userOcc.slice(0,days*1440):synthOcc(days,p.seats,r);
+ const sc=new Smart(p,rngF(p.seed+2));
+ const b=simulate(p,new Base(p,rngF(p.seed+1)),occ,wx,false),s=simulate(p,sc,occ,wx,true);
+ res={p,days,occ,wx,b,s,sb:summary(p,b,occ),ss:summary(p,s,occ),overrides:sc.overrides};
+ const day=$('day');day.max=days;
+ if(!run.touched){let best=0,bi=0;for(let d=0;d<days;d++){if(d%7>4)continue;let sum=0;for(let i=d*1440;i<(d+1)*1440;i++)sum+=occ[i];if(sum>best){best=sum;bi=d}}day.value=bi+1}
+ if(+day.value>days)day.value=days;
+ render()}
+function tileWx(w,days){const t=[],rh=[];for(let i=0;i<days*24;i++){t.push(w.t[i%w.t.length]);rh.push(w.rh[i%w.rh.length])}return{t,rh}}
+
+function render(){
+ const{p,days,sb,ss}=res,saved=sb.kwh-ss.kwh,pct=sb.kwh>0?100*saved/sb.kwh:0,per30=30/days;
+ const lkrMonth=saved*p.tariff*per30,perAc=lkrMonth/p.nac,payback=perAc>0?p.price/perAc:Infinity;
+ $('headline').textContent=pct>=0?`The device cuts AC energy ${fmt(pct)}% and keeps the room comfortable ${fmt(ss.ok)}% of class time`:`With these settings the device uses ${fmt(-pct)}% more energy than today`;
+ $('lede').textContent=`${days} days in ${/^8|^18|^11/.test(String(p.seats))?'an':'a'} ${p.seats}-seat room with ${p.nac} × ${fmt(p.cap,1)} kW ${p.type==='fixed'?'fixed-speed':'inverter'} ACs. Today's habits keep the room comfortable ${fmt(sb.ok)}% of class time.`;
+ const k=[[`${fmt(pct)}%`,'less AC energy'],[`${fmt(saved*per30)} kWh`,'saved per month'],[`LKR ${fmt(lkrMonth)}`,'saved per month'],[`${fmt(saved*.71*per30)} kg`,'CO₂e avoided per month'],[isFinite(payback)?`${fmt(payback,1)} mo`:'n/a',`payback at LKR ${fmt(p.price)} per AC`]];
+ $('kpis').innerHTML=k.map(([n,l])=>`<div class="kpi"><div class="num">${n}</div><div class="lab">${l}</div></div>`).join('');
+ const split=(name,s)=>`<div class="row"><span>${name}</span><div class="bar">${[['cold',s.cold],['ok',s.ok],['warm',s.warm]].map(([c,v])=>`<span class="${c}" style="width:${v}%">${v>=9?fmt(v)+'%':''}</span>`).join('')}</div></div>`;
+ $('split').innerHTML=split('Today',sb)+split('Device',ss);
+ const rows=[['AC energy, kWh',sb.kwh,ss.kwh,0],['AC on, hours',sb.on,ss.on,0],['AC on in an empty room, hours',sb.onEmpty,ss.onEmpty,0],['Average room temp in class, °C',sb.meanT,ss.meanT,1],['Compressor starts',sb.starts,ss.starts,0],['Minutes over 28 °C in class',sb.alarm,ss.alarm,0],['Remote overrides',0,res.overrides,0]];
+ $('ops').innerHTML=`<thead><tr><th></th><th>Today</th><th>Device</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r[0]}</td><td>${fmt(r[1],r[3])}</td><td>${fmt(r[2],r[3])}</td></tr>`).join('')}</tbody>`;
+ $('dailyTitle').textContent=`Daily AC energy: ${fmt(pct)}% saved over ${days} days`;
+ const meas=+$('measured').value;
+ $('calOut').textContent=meas>0?`model ${fmt(sb.kwh)} kWh, ${(sb.kwh-meas)/meas*100>=0?'+':''}${fmt((sb.kwh-meas)/meas*100)}% ${Math.abs((sb.kwh-meas)/meas)<=.15?'· OK':'· adjust room'}`:'';
+ for(const id of ['seats','nac','forget','blo','bhi','empty','off','tariff','price','seed']){const o=$(id+'O');if(o)o.textContent=({forget:v=>v+' h',blo:v=>v+' °C',bhi:v=>v+' °C',empty:v=>v+' min',off:v=>'+'+v+' min',price:v=>fmt(+v),tariff:v=>v})[id]?.($(id).value)??$(id).value}
+ drawDay();drawDaily()}
+
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+function drawDay(){if(!res)return;const s=$('daySvg'),W=s.clientWidth,H=s.clientHeight;if(!W||!H)return;
+ const d=+$('day').value-1,{b,s:sm,occ,wx,p}=res,a=d*1440+6*60,z=d*1440+20*60,narrow=W<520;
+ const dn=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][d%7];$('dayOut').textContent=`Day ${d+1} · ${dn}`;
+ const L=40,R=narrow?12:78,top=10,gap=26,ph=H-top-30-gap*2,h1=ph*.52,h2=ph*.28,h3=ph*.2,y1=top,y2=y1+h1+gap,y3=y2+h2+gap,iw=W-L-R;
+ const X=m=>L+(m-a)/(z-a)*iw;
+ let tmin=99,tmax=-99;for(let m=a;m<z;m++){tmin=Math.min(tmin,b.T[m],sm.T[m]);tmax=Math.max(tmax,b.T[m],sm.T[m],wx.t[Math.floor(m/60)])}
+ tmin=Math.floor(Math.min(tmin,p.blo)-.5);tmax=Math.ceil(tmax+.5);const YT=t=>y1+h1-(t-tmin)/(tmax-tmin)*h1;
+ let pmax=0;for(let m=a;m<z;m++)pmax=Math.max(pmax,b.P[m],sm.P[m]);pmax=Math.max(1,Math.ceil(pmax/1000));const YP=v=>y2+h2-v/1000/pmax*h2;
+ let omax=1;for(let m=a;m<z;m++)omax=Math.max(omax,occ[m]);const YO=v=>y3+h3-v/omax*h3;
+ const path=(arr,Y,st=1)=>{let q='';for(let m=a;m<z;m+=st)q+=(q?'L':'M')+X(m).toFixed(1)+','+Y(arr[m]).toFixed(1);return q};
+ const dev=css('--dev')||'#1f8a5f',bas=css('--base')||'#d98a1c',out=css('--out')||'#999',line=css('--line')||'#ddd';
+ let g='';
+ for(let t=Math.ceil(tmin);t<=tmax;t+=2)g+=`<line x1="${L}" x2="${L+iw}" y1="${YT(t)}" y2="${YT(t)}" stroke="${line}"/><text x="${L-6}" y="${YT(t)+4}" text-anchor="end">${t}°</text>`;
+ g+=`<rect x="${L}" width="${iw}" y="${YT(p.bhi)}" height="${YT(p.blo)-YT(p.bhi)}" fill="var(--band)"/>`;
+ let wq='';for(let m=a;m<z;m+=10)wq+=(wq?'L':'M')+X(m).toFixed(1)+','+YT(wx.t[Math.floor(m/60)]+(wx.t[Math.floor(m/60)+1]-wx.t[Math.floor(m/60)])*(m%60)/60||wx.t[Math.floor(m/60)]).toFixed(1);
+ g+=`<path d="${wq}" fill="none" stroke="${out}" stroke-dasharray="3 4" stroke-width="1.5"/>`;
+ g+=`<path d="${path(b.T,YT)}" fill="none" stroke="${bas}" stroke-width="2"/><path d="${path(sm.T,YT)}" fill="none" stroke="${dev}" stroke-width="2.4"/>`;
+ if(!narrow){const e=z-1;g+=`<text class="lab" x="${L+iw+6}" y="${YT(b.T[e])+4}" style="fill:${bas}">Today</text><text class="lab" x="${L+iw+6}" y="${YT(sm.T[e])+4+(Math.abs(YT(sm.T[e])-YT(b.T[e]))<16?16:0)}" style="fill:${dev}">Device</text><text x="${L+iw+6}" y="${YT(wx.t[Math.floor(e/60)])+4}">Outdoor</text>`}
+ g+=`<text x="${L}" y="${y1+h1+16}" style="font-size:12px">Room temperature</text>`;
+ for(let v=0;v<=pmax;v+=Math.max(1,Math.ceil(pmax/3)))g+=`<line x1="${L}" x2="${L+iw}" y1="${YP(v*1000)}" y2="${YP(v*1000)}" stroke="${line}"/><text x="${L-6}" y="${YP(v*1000)+4}" text-anchor="end">${v}</text>`;
+ g+=`<path d="${path(b.P,YP)}" fill="none" stroke="${bas}" stroke-width="1"/><path d="${path(sm.P,YP)}" fill="none" stroke="${dev}" stroke-width="1.2"/>`;
+ g+=`<text x="${L}" y="${y2+h2+16}" style="font-size:12px">AC power, kW</text>`;
+ let oq=`M${X(a)},${YO(0)}`;for(let m=a;m<z;m++)oq+=`L${X(m).toFixed(1)},${YO(occ[m]).toFixed(1)}L${X(m+1).toFixed(1)},${YO(occ[m]).toFixed(1)}`;oq+=`L${X(z)},${YO(0)}Z`;
+ g+=`<path d="${oq}" fill="${out}" opacity=".45"/><text x="${L-6}" y="${YO(omax)+4}" text-anchor="end">${omax}</text><text x="${L-6}" y="${YO(0)+4}" text-anchor="end">0</text>`;
+ for(let hh=6;hh<=20;hh+=narrow?4:2)g+=`<text x="${X(d*1440+hh*60)}" y="${H-6}" text-anchor="middle">${String(hh).padStart(2,'0')}:00</text>`;
+ if(!narrow)g+=`<text x="${L+iw+6}" y="${YO(omax/2)+4}">People</text>`;
+ s.innerHTML=g}
+
+function drawDaily(){if(!res)return;const s=$('dailySvg'),W=s.clientWidth,H=s.clientHeight;if(!W||!H)return;
+ const{b,s:sm,days}=res,L=40,R=10,T=10,B=26,iw=W-L-R,ih=H-T-B,bd=[],sd=[];
+ for(let d=0;d<days;d++){let x=0,y=0;for(let i=d*1440;i<(d+1)*1440;i++){x+=b.P[i];y+=sm.P[i]}bd.push(x/60000);sd.push(y/60000)}
+ const mx=Math.max(1,...bd,...sd),step=mx>60?20:mx>20?10:5,top=Math.ceil(mx/step)*step,Y=v=>T+ih-v/top*ih,bw=iw/days,line=css('--line')||'#ddd',cur=+$('day').value-1;
+ let g='';for(let v=0;v<=top;v+=step)g+=`<line x1="${L}" x2="${L+iw}" y1="${Y(v)}" y2="${Y(v)}" stroke="${line}"/><text x="${L-6}" y="${Y(v)+4}" text-anchor="end">${v}</text>`;
+ for(let d=0;d<days;d++){const x=L+d*bw,w=Math.max(1,bw*.38);
+  if(d===cur)g+=`<rect x="${x}" y="${T}" width="${bw}" height="${ih}" fill="var(--band)"/>`;
+  g+=`<rect x="${x+bw*.1}" y="${Y(bd[d])}" width="${w}" height="${Y(0)-Y(bd[d])}" fill="var(--base)"/><rect x="${x+bw*.1+w}" y="${Y(sd[d])}" width="${w}" height="${Y(0)-Y(sd[d])}" fill="var(--dev)"/>`;
+  if(days<=14||d%(W<520?7:5)===0)g+=`<text x="${x+bw/2}" y="${H-6}" text-anchor="middle">${d+1}</text>`}
+ g+=`<text x="${L+iw}" y="${T+12}" text-anchor="end" class="lab" style="fill:var(--base)">Today</text><text x="${L+iw}" y="${T+30}" text-anchor="end" class="lab" style="fill:var(--dev)">Device</text>`;
+ s.innerHTML=g}
+
+const roDay=new ResizeObserver(drawDay);roDay.observe($('daySvg'));
+const roDaily=new ResizeObserver(drawDaily);roDaily.observe($('dailySvg'));
+let timer=null;const later=()=>{clearTimeout(timer);timer=setTimeout(run,80)};
+for(const id of ['seats','nac','cap','actype','days','habit','forget','blo','bhi','empty','off','precool','seed'])$(id).addEventListener('input',later);
+for(const id of ['tariff','price','measured'])$(id).addEventListener('input',()=>res&&render());
+$('day').addEventListener('input',()=>{run.touched=true;drawDay();drawDaily()});
+$('reset').addEventListener('click',()=>{for(const[k,v]of Object.entries(defaults)){if(k==='precool')$(k).checked=v;else $(k).value=v}run.touched=false;run()});
+
+const parseCsv=txt=>{const lines=txt.trim().split(/\r?\n/),head=lines[0].split(',').map(h=>h.trim().toLowerCase());return lines.slice(1).map(l=>{const c=l.split(',');const o={};head.forEach((h,i)=>o[h]=parseFloat(c[i]));return o})};
+$('occFile').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;try{const rows=parseCsv(await f.text()).filter(r=>isFinite(r.minute));const n=Math.ceil((Math.max(...rows.map(r=>r.minute))+1)/1440)*1440,o=new Int16Array(n);for(const r of rows)o[r.minute]=r.count||0;userOcc=o;$('fileMsg').textContent=`Loaded ${rows.length} occupancy rows (${n/1440} days).`;run.touched=false;run()}catch(err){$('fileMsg').textContent='Could not read that occupancy file. Expected columns: minute,count.'}});
+$('wxFile').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;try{const rows=parseCsv(await f.text()).filter(r=>isFinite(r.t_out));userWx={t:rows.map(r=>r.t_out),rh:rows.map(r=>(r.rh_out>1?r.rh_out/100:r.rh_out))};$('fileMsg').textContent=`Loaded ${rows.length} hours of weather.`;run()}catch(err){$('fileMsg').textContent='Could not read that weather file. Expected columns: hour,t_out,rh_out.'}});
+$('clearFiles').addEventListener('click',()=>{userOcc=userWx=null;$('occFile').value='';$('wxFile').value='';$('fileMsg').textContent='Back to sample inputs.';run.touched=false;run()});
+
+window.__sim={simulate,summary,synthWeather,synthOcc,Base,Smart,rngF,MIX};
+run();
+}
+</script>
+</body>
+</html>
